@@ -1,0 +1,44 @@
+{
+  "arrows": [
+    {
+      "order": 1,
+      "icon": "arrow",
+      "rotation": 0,
+      "position": {
+        "x": 50,
+        "y": 30
+      },
+      "duration": 10000
+    },
+    {
+      "order": 2,
+      "icon": "arrow",
+      "rotation": 270,
+      "position": {
+        "x": 50,
+        "y": 30
+      },
+      "duration": 10000
+    },
+    {
+      "order": 3,
+      "icon": "arrow",
+      "rotation": 90,
+      "position": {
+        "x": 50,
+        "y": 30
+      },
+      "duration": 10000
+    },
+    {
+      "order": 4,
+      "icon": "arrow",
+      "rotation": 180,
+      "position": {
+        "x": 50,
+        "y": 30
+      },
+      "duration": 10000
+    }
+  ]
+}
