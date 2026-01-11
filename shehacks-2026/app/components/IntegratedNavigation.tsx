@@ -272,7 +272,10 @@ export default function IntegratedNavigation() {
       }
 
       try {
-        if (interrupt) window.speechSynthesis.cancel();
+        // Checkpoint announcements have priority - always interrupt other speech
+        if (interrupt) {
+          window.speechSynthesis.cancel();
+        }
 
         const utterance = new SpeechSynthesisUtterance(msg);
         utterance.lang = 'en-US';
@@ -326,6 +329,11 @@ export default function IntegratedNavigation() {
 
     let segmentPrompted = false;
     let lastConfirmedAt = 0;
+    
+    // Prevent false checkpoint announcements on initial load
+    let sceneInitialized = false;
+    const INITIALIZATION_DELAY_MS = 3000; // Wait 3 seconds after scripts load before accepting checkpoints
+    let initializationStartTime = Date.now();
 
     function resetNav() {
       currentNode = null;
@@ -436,6 +444,13 @@ export default function IntegratedNavigation() {
     function onNodeConfirmed(nodeId: string) {
       if (!ACTIVE_NODES.has(nodeId)) return;
 
+      // Prevent checkpoint announcements on initial load - wait for initialization period
+      const now = Date.now();
+      if (!sceneInitialized && (now - initializationStartTime < INITIALIZATION_DELAY_MS)) {
+        return; // Ignore checkpoints during initial load period
+      }
+      sceneInitialized = true;
+
       // NEW: once arrived, ignore further targetFound events until destination changes or reset
       if (arrived) return;
 
@@ -535,6 +550,9 @@ export default function IntegratedNavigation() {
         el.addEventListener('targetFound', targetFoundHandlers[i]);
       }
 
+      // Reset initialization timing
+      sceneInitialized = false;
+      initializationStartTime = Date.now();
       resetNav();
     }, 200);
 
@@ -581,6 +599,7 @@ export default function IntegratedNavigation() {
       if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
       try {
+        // Checkpoint announcements have priority - interrupt any other speech
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'en-US';
@@ -640,7 +659,7 @@ export default function IntegratedNavigation() {
           }
         }
 
-        if (matchedDestination && matchedDestination !== destination) {
+        if (matchedDestination) {
           const checkpointName = nodeLabels[matchedDestination] || matchedDestination;
           setDestination(matchedDestination);
           setStatus(`Destination set to ${checkpointName} via voice command.`);
