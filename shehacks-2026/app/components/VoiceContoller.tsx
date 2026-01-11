@@ -141,8 +141,8 @@ const VoiceController = () => {
           if (checkpoint) {
             console.log(`🎯 Checkpoint matched: ${checkpoint.name}`);
             setMatchedCheckpoint(checkpoint.name);
-            setStatus(`Checkpoint detected: ${checkpoint.name}`);
-            speakText(`Checkpoint detected: ${checkpoint.name}`);
+            setStatus(`Destination is set to ${checkpoint.name}`);
+            speakText(`Destination is set to ${checkpoint.name}`);
           }
         } else {
           console.log('❌ No checkpoint matched for:', transcript);
