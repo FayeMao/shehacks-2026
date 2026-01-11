@@ -825,25 +825,22 @@ export default function IntegratedNavigation() {
       <div className="integrated-scene" ref={sceneRef}>
         {scriptsLoaded ? (
           <>
-            <div
-              dangerouslySetInnerHTML={{
-                __html: `<a-scene
-                  style="position: fixed; inset: 0; width: 100vw; height: 100vh;"
-                  mindar-image="imageTargetSrc: /targets.mind; autoStart: true;"
-                  color-space="sRGB"
-                  renderer="colorManagement: true"
-                  vr-mode-ui="enabled: false"
-                  device-orientation-permission-ui="enabled: true"
-                >
-                  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-                  <a-entity id="t0" mindar-image-target="targetIndex: 0"></a-entity>
-                  <a-entity id="t1" mindar-image-target="targetIndex: 1"></a-entity>
-                  <a-entity id="t2" mindar-image-target="targetIndex: 2"></a-entity>
-                  <a-entity id="t3" mindar-image-target="targetIndex: 3"></a-entity>
-                  <a-entity id="t4" mindar-image-target="targetIndex: 4"></a-entity>
-                </a-scene>`,
-              }}
-            />
+            <a-scene
+              style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh' }}
+              mindar-image="imageTargetSrc: /targets.mind; autoStart: true;"
+              color-space="sRGB"
+              renderer="colorManagement: true"
+              vr-mode-ui="enabled: false"
+              device-orientation-permission-ui="enabled: true"
+            >
+              <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+              <a-entity id="t0" mindar-image-target="targetIndex: 0"></a-entity>
+              <a-entity id="t1" mindar-image-target="targetIndex: 1"></a-entity>
+              <a-entity id="t2" mindar-image-target="targetIndex: 2"></a-entity>
+              <a-entity id="t3" mindar-image-target="targetIndex: 3"></a-entity>
+              <a-entity id="t4" mindar-image-target="targetIndex: 4"></a-entity>
+            </a-scene>
 
             {mindarVideoElement && <ObjectDetection externalVideoElement={mindarVideoElement} showUI={false} />}
           </>
