@@ -351,14 +351,14 @@ export default function IntegratedNavigation() {
 
       arrived = false;
 
-      speak(`Destination is set to ${nodes[destinationNode].label}. Scan the room so we can locate you.`, {
+      speak(`Destination set to ${nodes[destinationNode].label}. Scan the room so we can locate you.`, {
         interrupt: true,
       });
     }
 
     function getEdgeInstruction(from: string, to: string): string {
       const e = (edges[from] || []).find((x) => x.to === to);
-      return e ? e.say : 'Keep moving forward.';
+      return e ? e.say : 'Keep moving forward with caution.';
     }
 
     function announceNextInstruction() {
@@ -404,7 +404,7 @@ export default function IntegratedNavigation() {
       if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) return;
 
       segmentPrompted = true;
-      speak('Keep moving forward.', { interrupt: false });
+      speak('Keep moving forward with caution.', { interrupt: false });
     }
 
     const movementPromptInterval = setInterval(maybeGiveMovementPrompt, 700);
@@ -429,7 +429,7 @@ export default function IntegratedNavigation() {
       // from elevator: left, from main hall: right
       const turn = cameFrom === 'elevator' ? 'Go left.' : 'Go right.';
       finishArrival(
-        `You are at ${nodes.washroom.label}. ${turn} The door is in front of you. Open the door to enter.`
+        `You are at ${nodes.washroom.label}. ${turn} The door is in front of you. Walk with caution and open the door to enter.`
       );
     }
 
@@ -643,8 +643,8 @@ export default function IntegratedNavigation() {
         if (matchedDestination && matchedDestination !== destination) {
           const checkpointName = nodeLabels[matchedDestination] || matchedDestination;
           setDestination(matchedDestination);
-          setStatus(`Destination is set to ${checkpointName} via voice command.`);
-          speakViaTTS(`Destination is set to ${checkpointName}.`);
+          setStatus(`Destination set to ${checkpointName} via voice command.`);
+          speakViaTTS(`Destination set to ${checkpointName}.`);
         }
       };
 
