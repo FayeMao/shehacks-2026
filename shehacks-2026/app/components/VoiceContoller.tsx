@@ -141,8 +141,33 @@ const VoiceController = () => {
           if (checkpoint) {
             console.log(`🎯 Checkpoint matched: ${checkpoint.name}`);
             setMatchedCheckpoint(checkpoint.name);
-            setStatus(`Checkpoint detected: ${checkpoint.name}`);
-            speakText(`Checkpoint detected: ${checkpoint.name}`);
+            setStatus(`Destination set to ${checkpoint.name}`);
+            // Dispatch checkpoint announcement start event (for future integration with object detection)
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('checkpoint-announcement-start'));
+            }
+            
+            const utterance = new SpeechSynthesisUtterance(`Destination set to ${checkpoint.name}`);
+            utterance.lang = 'en-US';
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            utterance.onend = () => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('checkpoint-announcement-end'));
+              }
+            };
+            utterance.onerror = () => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('checkpoint-announcement-end'));
+              }
+            };
+            
+            // Cancel any ongoing speech
+            if (typeof window !== 'undefined' && window.speechSynthesis) {
+              window.speechSynthesis.cancel();
+              window.speechSynthesis.speak(utterance);
+            }
           }
         } else {
           console.log('❌ No checkpoint matched for:', transcript);

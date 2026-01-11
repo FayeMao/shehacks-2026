@@ -1,25 +1,18 @@
 'use client';
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, Square, MapPin } from 'lucide-react';
+import { Camera, Square } from 'lucide-react';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import '@tensorflow/tfjs';
-
-// Define checkpoint interface
-interface Checkpoint {
-  id: string;
-  name: string;
-  targetObjects: string[];
-  reached: boolean;
-}
 
 interface ObjectDetectionProps {
   externalVideoElement?: HTMLVideoElement | null;
   autoStart?: boolean;
   showUI?: boolean;
+  onCheckpointAnnouncement?: (isAnnouncing: boolean) => void;
 }
 
-const ObjectDetection = ({ externalVideoElement, autoStart = false, showUI = true }: ObjectDetectionProps) => {
+const ObjectDetection = ({ externalVideoElement, autoStart = false, showUI = true, onCheckpointAnnouncement }: ObjectDetectionProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -36,15 +29,8 @@ const ObjectDetection = ({ externalVideoElement, autoStart = false, showUI = tru
   const [error, setError] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
   
-  // Navigation-specific state - matching navigation landmarks
-  // Note: COCO-SSD doesn't detect doors/elevators, so we use objects commonly found in these areas
-  const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([
-    { id: 'elevator', name: 'Elevator', targetObjects: ['person'], reached: false },
-    { id: 'washroom', name: 'Washroom', targetObjects: ['toilet', 'sink'], reached: false },
-    { id: 'mainhall', name: 'Main Hall', targetObjects: ['chair', 'bench', 'person'], reached: false },
-    { id: 'exitdoor', name: 'Exit Door', targetObjects: ['person'], reached: false },
-  ]);
-  const [currentCheckpoint, setCurrentCheckpoint] = useState<string>('');
+  // Track if checkpoint is currently being announced (from MindAR)
+  const checkpointSpeakingRef = useRef<boolean>(false);
 
   useEffect(() => {
     loadModel();
@@ -87,8 +73,35 @@ const ObjectDetection = ({ externalVideoElement, autoStart = false, showUI = tru
     }
   };
 
+  // Listen for checkpoint announcements from parent (MindAR) or voice controller
+  // This ensures checkpoint announcements always have priority over object detection
+  useEffect(() => {
+    const handleCheckpointStart = () => {
+      checkpointSpeakingRef.current = true;
+      // Cancel any ongoing object detection speech
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeaking(false);
+    };
+    
+    const handleCheckpointEnd = () => {
+      checkpointSpeakingRef.current = false;
+    };
+    
+    // Listen to custom events for checkpoint announcements
+    window.addEventListener('checkpoint-announcement-start', handleCheckpointStart);
+    window.addEventListener('checkpoint-announcement-end', handleCheckpointEnd);
+    
+    return () => {
+      window.removeEventListener('checkpoint-announcement-start', handleCheckpointStart);
+      window.removeEventListener('checkpoint-announcement-end', handleCheckpointEnd);
+    };
+  }, []);
+
   const speakText = async (text: string) => {
-    if (isSpeaking) return;
+    // Don't speak if checkpoint is being announced (higher priority)
+    if (isSpeaking || checkpointSpeakingRef.current) return;
     
     try {
       setIsSpeaking(true);
@@ -108,6 +121,11 @@ const ObjectDetection = ({ externalVideoElement, autoStart = false, showUI = tru
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
       };
+      
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
 
       await audio.play();
     } catch (err) {
@@ -116,66 +134,7 @@ const ObjectDetection = ({ externalVideoElement, autoStart = false, showUI = tru
     }
   };
 
-  const checkForCheckpoints = (predictions: cocoSsd.DetectedObject[]) => {
-    // Normalize detected class names (lowercase for comparison)
-    const detectedClasses = predictions.map(p => p.class.toLowerCase().trim());
-    
-    // Class name mappings for COCO-SSD variations
-    const classMappings: Record<string, string[]> = {
-      'tv': ['tv', 'television'],
-      'remote': ['remote', 'remote control'],
-      'cell phone': ['cell phone', 'mobile phone', 'phone'],
-      'mouse': ['mouse', 'computer mouse'],
-      'toilet': ['toilet'],
-      'sink': ['sink'],
-      'chair': ['chair'],
-      'bench': ['bench'],
-      'person': ['person'],
-    };
-
-    // Use functional update to access current state and avoid stale closures
-    setCheckpoints(prev => {
-      const newCheckpoints = prev.map(checkpoint => {
-        // Skip if already reached
-        if (checkpoint.reached) return checkpoint;
-        
-        const hasRequiredObjects = checkpoint.targetObjects.some(targetObj => {
-          const normalizedTarget = targetObj.toLowerCase().trim();
-          
-          // Direct match
-          if (detectedClasses.includes(normalizedTarget)) {
-            return true;
-          }
-          
-          // Check class mappings
-          const variations = classMappings[normalizedTarget] || [normalizedTarget];
-          return variations.some(variation => detectedClasses.includes(variation));
-        });
-        
-        if (hasRequiredObjects) {
-          const reachedCheckpoint = { ...checkpoint, reached: true };
-          
-          // Handle side effects after state update
-          Promise.resolve().then(() => {
-            setCurrentCheckpoint(reachedCheckpoint.name);
-            speakText(`Checkpoint reached: ${reachedCheckpoint.name}`);
-          });
-          
-          console.log(`✅ Checkpoint reached: ${reachedCheckpoint.name}`, {
-            detected: detectedClasses,
-            required: checkpoint.targetObjects,
-            allDetections: predictions.map(p => `${p.class} (${(p.score * 100).toFixed(1)}%)`)
-          });
-          
-          return reachedCheckpoint;
-        }
-        
-        return checkpoint;
-      });
-      
-      return newCheckpoints;
-    });
-  };
+  // Checkpoint detection removed - checkpoints are now only detected via MindAR
 
   const checkProximityAlerts = (predictions: cocoSsd.DetectedObject[]) => {
     const now = Date.now();
@@ -195,7 +154,8 @@ const ObjectDetection = ({ externalVideoElement, autoStart = false, showUI = tru
   };
 
   const announceDetections = async (predictions: cocoSsd.DetectedObject[]) => {
-    if (predictions.length === 0 || isSpeaking) return;
+    // Don't announce if checkpoint is speaking (higher priority) or already speaking
+    if (predictions.length === 0 || isSpeaking || checkpointSpeakingRef.current) return;
 
     // Group objects by distance
     const objectsByDistance: { [key: string]: string[] } = {
@@ -251,14 +211,12 @@ const ObjectDetection = ({ externalVideoElement, autoStart = false, showUI = tru
           console.log('Detected objects:', filtered.map(p => p.class));
         }
         
-        // Check for checkpoints
-        checkForCheckpoints(filtered);
-        
         // Check for proximity alerts
         checkProximityAlerts(filtered);
         
+        // Announce detections with 5-second minimum delay and only if no checkpoint is speaking
         const now = Date.now();
-        if (now - lastAnnouncementTimeRef.current > 5000 && !isSpeaking && filtered.length > 0) {
+        if (now - lastAnnouncementTimeRef.current >= 5000 && !isSpeaking && !checkpointSpeakingRef.current && filtered.length > 0) {
           lastAnnouncementTimeRef.current = now;
           announceDetections(filtered);
         }
@@ -364,10 +322,6 @@ const ObjectDetection = ({ externalVideoElement, autoStart = false, showUI = tru
     setIsDetecting(false);
   };
 
-  const resetCheckpoints = () => {
-    setCheckpoints(prev => prev.map(cp => ({ ...cp, reached: false })));
-    setCurrentCheckpoint('');
-  };
 
   if (!showUI) {
     // Hidden mode - just render canvas overlay
@@ -402,41 +356,6 @@ const ObjectDetection = ({ externalVideoElement, autoStart = false, showUI = tru
           <button onClick={testAudio} disabled={isSpeaking} className="bg-purple-600 px-6 py-2 rounded disabled:opacity-50">
             {isSpeaking ? '🔊 Speaking...' : '🔊 Test Audio'}
           </button>
-          <button onClick={resetCheckpoints} className="bg-blue-600 px-6 py-2 rounded flex items-center gap-2 hover:bg-blue-500">
-            <MapPin size={20}/> Reset Checkpoints
-          </button>
-        </div>
-
-        {/* Checkpoint Status */}
-        <div className="mb-6 bg-gray-800 p-4 rounded-lg">
-          <h2 className="text-xl font-bold mb-3 flex items-center justify-center gap-2">
-            <MapPin size={24}/> Navigation Checkpoints
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {checkpoints.map((cp) => (
-              <div 
-                key={cp.id} 
-                className={`p-3 rounded-lg border-2 transition-all ${
-                  cp.reached 
-                    ? 'bg-green-900 border-green-500' 
-                    : 'bg-gray-700 border-gray-500'
-                }`}
-              >
-                <p className="font-bold">{cp.name}</p>
-                <p className="text-xs text-gray-300">
-                  {cp.targetObjects.join(', ')}
-                </p>
-                <p className="text-sm mt-2">
-                  {cp.reached ? '✅ Reached' : '⏳ Pending'}
-                </p>
-              </div>
-            ))}
-          </div>
-          {currentCheckpoint && (
-            <div className="mt-4 bg-green-800 p-3 rounded-lg animate-pulse">
-              <p className="font-bold">🎯 Current: {currentCheckpoint}</p>
-            </div>
-          )}
         </div>
 
         <div className="relative bg-black rounded-xl overflow-hidden aspect-video border-4 border-gray-700">

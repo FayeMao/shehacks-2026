@@ -273,10 +273,13 @@ export default function IntegratedNavigation() {
       }
 
       try {
-        // Cancel any ongoing speech if interrupt is requested
+        // Cancel any ongoing speech if interrupt is requested (checkpoint announcements always interrupt)
         if (interrupt) {
           window.speechSynthesis.cancel();
         }
+
+        // Dispatch event to notify ObjectDetection that checkpoint announcement is starting
+        window.dispatchEvent(new CustomEvent('checkpoint-announcement-start'));
 
         const utterance = new SpeechSynthesisUtterance(msg);
         utterance.lang = 'en-US';
@@ -286,11 +289,19 @@ export default function IntegratedNavigation() {
 
         utterance.onerror = (event) => {
           console.error('SpeechSynthesis error:', event);
+          // Dispatch end event on error
+          window.dispatchEvent(new CustomEvent('checkpoint-announcement-end'));
+        };
+
+        utterance.onend = () => {
+          // Dispatch event to notify ObjectDetection that checkpoint announcement ended
+          window.dispatchEvent(new CustomEvent('checkpoint-announcement-end'));
         };
 
         window.speechSynthesis.speak(utterance);
       } catch (e) {
         console.error('TTS Error:', e);
+        window.dispatchEvent(new CustomEvent('checkpoint-announcement-end'));
       }
     }
 
@@ -633,15 +644,35 @@ export default function IntegratedNavigation() {
           }
         }
 
-        if (matchedDestination && matchedDestination !== destination) {
+        if (matchedDestination) {
           const checkpointName = nodeLabels[matchedDestination] || matchedDestination;
-          console.log(`🎯 Destination changed: ${destination} → ${matchedDestination} (${checkpointName})`);
-          setDestination(matchedDestination);
-          setStatus(`Destination set to ${checkpointName} via voice command.`);
-          // Speak the matched checkpoint
-          speakViaTTS(`Checkpoint detected: ${checkpointName}. Destination set to ${checkpointName}.`);
-        } else if (matchedDestination) {
-          console.log(`ℹ️ Destination already set to: ${matchedDestination}`);
+          
+          if (matchedDestination !== destination) {
+            console.log(`🎯 Destination changed: ${destination} → ${matchedDestination} (${checkpointName})`);
+            setDestination(matchedDestination);
+            setStatus(`Destination set to ${checkpointName} via voice command.`);
+            // Dispatch checkpoint announcement start event
+            window.dispatchEvent(new CustomEvent('checkpoint-announcement-start'));
+            
+            // Speak the destination
+            const utterance = new SpeechSynthesisUtterance(`Destination set to ${checkpointName}`);
+            utterance.lang = 'en-US';
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            utterance.onend = () => {
+              window.dispatchEvent(new CustomEvent('checkpoint-announcement-end'));
+            };
+            utterance.onerror = () => {
+              window.dispatchEvent(new CustomEvent('checkpoint-announcement-end'));
+            };
+            
+            // Cancel any ongoing speech and speak immediately
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utterance);
+          } else {
+            console.log(`ℹ️ Destination already set to: ${matchedDestination}`);
+          }
         } else {
           console.log('❌ No destination matched for:', transcript);
         }
@@ -833,7 +864,13 @@ export default function IntegratedNavigation() {
               <a-entity id="t3" mindar-image-target="targetIndex: 3"></a-entity>
             </a-scene>
             {mindarVideoElement && (
-              <ObjectDetection externalVideoElement={mindarVideoElement} showUI={false} />
+              <ObjectDetection 
+                externalVideoElement={mindarVideoElement} 
+                showUI={false}
+                onCheckpointAnnouncement={(isAnnouncing) => {
+                  // This callback can be used if needed in the future
+                }}
+              />
             )}
           </>
         ) : (
